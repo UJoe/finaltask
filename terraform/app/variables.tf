@@ -7,16 +7,16 @@
 # command line).
 # -----------------------------------------------------------------------------
 
-variable "kubeconfig_path" {
-  description = "Path to the kubeconfig file that kubectl uses."
+variable "region" {
+  description = "AWS region of the EKS cluster."
   type        = string
-  default     = "~/.kube/config"
+  default     = "eu-central-1"
 }
 
-variable "kube_context" {
-  description = "Which kubeconfig context (= which cluster) to deploy to. Run `kubectl config get-contexts` to see them."
+variable "cluster_name" {
+  description = "Name of the EKS cluster to deploy to (created by the terraform/eks folder)."
   type        = string
-  # No default on purpose: you must decide consciously which cluster to use.
+  default     = "ugergo-finaltask"
 }
 
 variable "namespace" {

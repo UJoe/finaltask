@@ -68,6 +68,23 @@ module "eks" {
   # Without this, even the creator could not use kubectl on it.
   enable_cluster_creator_admin_permissions = true
 
+  # Also let the GitHub Actions role (used by the terraform-app.yml pipeline)
+  # into the cluster, so the pipeline can deploy the app.
+  # An "access entry" maps an AWS IAM role to permissions inside Kubernetes.
+  access_entries = {
+    github_actions = {
+      principal_arn = var.github_actions_role_arn
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster" # the pipeline creates the namespace, so it needs cluster-wide rights
+          }
+        }
+      }
+    }
+  }
+
   # Put the cluster into the VPC created above, using the private subnets.
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets

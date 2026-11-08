@@ -46,3 +46,9 @@ variable "node_count" {
   type        = number
   default     = 2
 }
+
+variable "github_actions_role_arn" {
+  description = "IAM role that the GitHub Actions pipeline assumes. It gets access to the cluster so it can deploy the app."
+  type        = string
+  default     = "arn:aws:iam::362099375729:role/finaltaskberheles"
+}

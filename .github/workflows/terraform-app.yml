@@ -1,0 +1,84 @@
+# -----------------------------------------------------------------------------
+# Deploys the app to Kubernetes with Terraform (the terraform/app folder).
+#
+#   Pull request -> terraform plan   (shows what WOULD change, changes nothing)
+#   Push to main -> terraform apply  (really changes the cluster)
+#
+# So to release a new version: change image_tag in terraform/app/terraform.tfvars
+# in a pull request, check the plan, merge -> the new version gets deployed.
+# -----------------------------------------------------------------------------
+name: Terraform-App
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/app/**'
+      - '.github/workflows/terraform-app.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/app/**'
+      - '.github/workflows/terraform-app.yml'
+
+# id-token: write is needed to log in to AWS with OIDC (no stored AWS keys).
+permissions:
+  id-token: write
+  contents: read
+
+# Never run two Terraform jobs at the same time - they would fight over
+# the same resources. A new run waits until the previous one is finished.
+concurrency:
+  group: terraform-app
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    # Run every "run:" command inside terraform/app.
+    defaults:
+      run:
+        working-directory: terraform/app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Same IAM role as the image build workflow.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      # Fails if the code is not formatted with `terraform fmt`.
+      - name: Terraform fmt
+        run: terraform fmt -check
+
+      # Downloads the providers and connects to the S3 state backend.
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      # --- Pull request: only show the changes --------------------------------
+      - name: Terraform plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -input=false
+
+      # --- Push to main: really apply the changes -----------------------------
+      # -auto-approve skips the "type yes" question, because nobody is there
+      # to type it. The review happened in the pull request.
+      - name: Terraform apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform apply -input=false -auto-approve
