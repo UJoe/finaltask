@@ -15,7 +15,7 @@ function App() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Create an ECR if you can!
+          Create an ECR if you can! Please, do it.
         </a>
       </header>
     </div>
