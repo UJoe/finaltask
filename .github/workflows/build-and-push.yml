@@ -1,11 +1,20 @@
 name: Build-Push
 
-on: 
+on:
   push:
     branches:
       - main
     paths:
       - 'src/**'
+
+# Required for OIDC authentication to AWS
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
 jobs:
   build:
@@ -13,4 +22,22 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v7
-    
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        run: docker build -t ${{ env.ECR_REPOSITORY }} .
+
+      - name: Tag image
+        run: docker tag ${{ env.ECR_REPOSITORY }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Push image
+        run: docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
