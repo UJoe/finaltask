@@ -1,0 +1,15 @@
+# Downloaded providers - recreated by `terraform init`
+.terraform/
+
+# State files describe what Terraform created. They can contain secrets,
+# so they must not be committed. (In a team you would store state remotely,
+# e.g. in an S3 bucket.)
+*.tfstate
+*.tfstate.*
+
+# Your personal values
+terraform.tfvars
+
+# Saved plan files
+tfplan
+*.tfplan
