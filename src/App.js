@@ -15,8 +15,9 @@ function App() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Create an ECR if you can! Please, do it.
+          Learn React
         </a>
+        <div>And now create a new version image, olle!</div>
       </header>
     </div>
   );
