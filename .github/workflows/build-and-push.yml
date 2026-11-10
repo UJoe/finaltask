@@ -7,10 +7,15 @@ on:
     paths:
       - 'src/**'
 
-# Required for OIDC authentication to AWS
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # Required for OIDC authentication to AWS
+  contents: write   # Required to push the new version tag (e.g. v1.1) back to the repo
+
+# Never run two builds at the same time: both would read the same latest
+# version and try to create the same new tag.
+concurrency:
+  group: build-and-push
+  cancel-in-progress: false
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
@@ -22,6 +27,25 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # fetch the full history including all tags, so we can find the latest version
+
+      # Find the newest vX.Y git tag and add 1 to the minor number:
+      #   no tag yet -> v1.0,  v1.0 -> v1.1,  v1.1 -> v1.2, ...
+      # The result is saved as a step output: steps.version.outputs.version
+      - name: Calculate next version
+        id: version
+        run: |
+          LATEST=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -z "$LATEST" ]; then
+            NEXT="v1.0"
+          else
+            MAJOR=$(echo "$LATEST" | cut -d. -f1)   # "v1.4" -> "v1"
+            MINOR=$(echo "$LATEST" | cut -d. -f2)   # "v1.4" -> "4"
+            NEXT="$MAJOR.$((MINOR + 1))"            # -> "v1.5"
+          fi
+          echo "Latest version: ${LATEST:-none} -> new version: $NEXT"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -37,7 +61,14 @@ jobs:
         run: docker build -t ${{ env.ECR_REPOSITORY }} .
 
       - name: Tag image
-        run: docker tag ${{ env.ECR_REPOSITORY }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: docker tag ${{ env.ECR_REPOSITORY }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.version.outputs.version }}
 
       - name: Push image
-        run: docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.version.outputs.version }}
+
+      # Only after the image is safely in ECR: save the version as a git tag,
+      # so the next run continues from here (and you can see which commit is v1.x).
+      - name: Create git tag
+        run: |
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
