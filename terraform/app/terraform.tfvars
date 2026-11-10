@@ -9,4 +9,4 @@
 #   aws ecr describe-images --repository-name ugergo/finaltask --query 'imageDetails[].imageTags' --output text
 # -----------------------------------------------------------------------------
 
-image_tag = "489488485808a15933dab49a016cde2130e99916"
+image_tag = "v1.0"
