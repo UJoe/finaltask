@@ -36,6 +36,7 @@ concurrency:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
 jobs:
   terraform:
@@ -56,6 +57,32 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      # Safety check: stop BEFORE plan/apply if the image_tag in terraform.tfvars
+      # does not exist in ECR. Otherwise Kubernetes would try to start pods with
+      # an image it cannot download (ImagePullBackOff) and the apply would hang.
+      - name: Check that the image tag exists in ECR
+        run: |
+          # Read the value from the line:  image_tag = "v1.0"
+          TAG=$(sed -nE 's/^[[:space:]]*image_tag[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' terraform.tfvars)
+          if [ -z "$TAG" ]; then
+            echo "::error file=terraform/app/terraform.tfvars::Could not find image_tag in terraform.tfvars"
+            exit 1
+          fi
+
+          # Ask ECR for this exact image. "length(images)" is 1 if it exists, 0 if not.
+          FOUND=$(aws ecr batch-get-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$TAG" \
+            --query 'length(images)' --output text)
+
+          if [ "$FOUND" != "1" ]; then
+            echo "::error file=terraform/app/terraform.tfvars::Image tag '$TAG' does not exist in ECR repository '$ECR_REPOSITORY'. Push the image first or fix image_tag."
+            echo "List the tags that do exist with:"
+            echo "  aws ecr describe-images --repository-name $ECR_REPOSITORY --query 'imageDetails[].imageTags[]' --output text"
+            exit 1
+          fi
+          echo "OK: image tag '$TAG' exists in ECR."
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
